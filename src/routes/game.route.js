@@ -17,3 +17,11 @@ router.get("/:id", async (req, res) => {
   const result = await gameService.getGameById(id);
   res.json(result);
 });
+
+router.post("/:id/reinforce", async (req, res) => {
+  const gameId = req.params.id;
+  const territoryId = Number(req.body.territoryId);
+
+  const result = await gameService.reinforcePlayer(gameId, territoryId);
+  res.json(result);
+});

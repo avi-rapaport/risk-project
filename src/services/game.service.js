@@ -1,7 +1,6 @@
 import { mapRepo } from "../repositories/map.repo.js";
 import { gameRepo } from "../repositories/game.repo.js";
 import fs from "fs/promises";
-import "dotenv/config";
 
 async function startGame(playerName) {
   if (!playerName.trim()) {
@@ -47,12 +46,81 @@ async function startGame(playerName) {
 async function getGameById(id) {
   const game = await gameRepo.findGameById(id);
   if (!game) {
-    const error = new Error("Game not found");
+    const error = new Error("Game not found1");
     error.status = 404;
+    throw error;
+  }
+
+  if (game.status === "finished") {
+    const error = new Error("Game already finished!");
+    error.status = 409;
     throw error;
   }
 
   return game;
 }
 
-export const gameService = { startGame, getGameById };
+async function reinforcePlayer(gameId, territoryId) {
+  const game = await getGameById(gameId);
+  if (game.status !== "playing" || game.phase !== "reinforce") {
+    const error = new Error("Game is not suitable for reinforcing!");
+    error.status = 400;
+    throw error;
+  }
+
+  const territory = game.territories.find((t) => t.id === territoryId);
+  if (territory.owner !== "player") {
+    const error = new Error("Territory is not owned by the player!");
+    error.status = 400;
+    throw error;
+  }
+
+  territory.soldiers += 3;
+  game.phase = "attack";
+
+  await gameRepo.updateGame(gameId, game);
+
+  return {
+    ...game,
+    playerEvent: { type: "reinforce", territoryId, soldiersAdded: 3 },
+    computerEvevts: [],
+  };
+}
+
+async function playerAttack(gameId, fromId, toId, soldiers) {
+  const game = await getGameById(gameId);
+  if (game.status !== "playing" || game.phase !== "attack") {
+    const error = new Error("Game is not suitable for attacking!");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!Number.isInteger(soldiers) || soldiers < 1) {
+    const error = new Error("Invalid amount of soldiers!");
+    error.status = 400;
+    throw error;
+  }
+
+  const from = game.territories.find((t) => t.id === fromId);
+  const to = game.territories.find((t) => t.id === toId);
+
+  if (from.owner !== "player") {
+    const error = new Error("Territory is not owned by the player!");
+    error.status = 400;
+    throw error;
+  }
+
+  if (to.owner !== "compuetr") {
+    const error = new Error("player already owned this territory!");
+    error.status = 400;
+    throw error;
+  }
+
+  if (from.soldiers - soldiers < 1) {
+    const error = new Error("player must leave at least one soldier behind!");
+    error.status = 400;
+    throw error;
+  }
+}
+
+export const gameService = { startGame, getGameById, reinforcePlayer };

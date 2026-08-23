@@ -20,4 +20,9 @@ async function findGameById(id) {
   return result;
 }
 
-export const gameRepo = { saveGameData, findGameById };
+async function updateGame(gameId, newData) {
+  const collection = await getCollection();
+  await collection.replaceOne({ _id: new ObjectId(gameId) }, newData);
+}
+
+export const gameRepo = { saveGameData, findGameById, updateGame };
