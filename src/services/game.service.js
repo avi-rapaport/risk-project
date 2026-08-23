@@ -1,6 +1,7 @@
 import { mapRepo } from "../repositories/map.repo.js";
 import { gameRepo } from "../repositories/game.repo.js";
 import fs from "fs/promises";
+import { calculateBattle } from "../utils/utils.battle.js";
 
 async function startGame(playerName) {
   if (!playerName.trim()) {
@@ -9,11 +10,15 @@ async function startGame(playerName) {
     throw error;
   }
 
-  let territories = await mapRepo.getMapByArea("middleEast");
-  if (!territories) {
-    const map = await fs.readFile("src/services/map.json", "utf8");
-    territories = JSON.parse(map);
-    mapRepo.saveMapTerritories({ area: "middleEas", territories });
+  let map = await mapRepo.getMapByArea("middleEast");
+  let territories;
+
+  if (!map) {
+    const mapFile = await fs.readFile("src/services/map.json", "utf8");
+    territories = JSON.parse(mapFile);
+    mapRepo.saveMapTerritories({ area: "middleEast", territories });
+  } else {
+    territories = map.territories;
   }
 
   territories.map((ter) => {
@@ -89,6 +94,15 @@ async function reinforcePlayer(gameId, territoryId) {
 
 async function playerAttack(gameId, fromId, toId, soldiers) {
   const game = await getGameById(gameId);
+  //   if (skip) {
+  //     game.phase = "move";
+  //     await gameRepo.updateGame(gameId, game);
+  //     return { ...game, playerEvent: null, computerEvevts: [] };
+  //   }
+
+  const from = game.territories.find((t) => t.id === fromId);
+  const to = game.territories.find((t) => t.id === toId);
+
   if (game.status !== "playing" || game.phase !== "attack") {
     const error = new Error("Game is not suitable for attacking!");
     error.status = 400;
@@ -100,9 +114,6 @@ async function playerAttack(gameId, fromId, toId, soldiers) {
     error.status = 400;
     throw error;
   }
-
-  const from = game.territories.find((t) => t.id === fromId);
-  const to = game.territories.find((t) => t.id === toId);
 
   if (from.owner !== "player") {
     const error = new Error("Territory is not owned by the player!");
@@ -116,11 +127,105 @@ async function playerAttack(gameId, fromId, toId, soldiers) {
     throw error;
   }
 
+  if (!from.neighbors.includes(to.id)) {
+    const error = new Error(
+      "Player cannot attack a territory that is not neighboring!",
+    );
+    error.status = 400;
+    throw error;
+  }
+
   if (from.soldiers - soldiers < 1) {
     const error = new Error("player must leave at least one soldier behind!");
     error.status = 400;
     throw error;
   }
+
+  from.soldiers -= soldiers;
+
+  const { survivors, winner } = calculateBattle(soldiers, to.soldiers);
+  let theWinner;
+
+  if (winner === "attacker") {
+    to.soldiers = survivors;
+    to.owner = "player";
+    theWinner = "player";
+
+    if (to.headquarters) {
+      game.status = "finished";
+      game.winner = "player";
+    }
+  } else {
+    to.soldiers = survivors;
+    theWinner = "computer";
+  }
+
+  game.phase = "move";
+
+  await gameRepo.updateGame(gameId, game);
+
+  return {
+    ...game,
+    playerEvent: { type: "attack", toId, fromId, soldiers, winner: theWinner },
+    computerEvevts: [],
+  };
 }
 
-export const gameService = { startGame, getGameById, reinforcePlayer };
+async function playerMove(gameId, fromId, toId, soldiers) {
+  const game = await getGameById(gameId);
+  const from = game.territories.find((t) => t.id === fromId);
+  const to = game.territories.find((t) => t.id === toId);
+
+  if (game.status !== "playing" || game.phase !== "move") {
+    const error = new Error("Game is not suitable for moving!");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!Number.isInteger(soldiers) || soldiers < 1) {
+    const error = new Error("Invalid amount of soldiers!");
+    error.status = 400;
+    throw error;
+  }
+
+  if (from.owner !== "player" || to.owner !== "player") {
+    const error = new Error("Territory is not owned by the player!");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!from.neighbors.includes(to.id)) {
+    const error = new Error(
+      "Player cannot move to a territory that is not neighboring!",
+    );
+    error.status = 400;
+    throw error;
+  }
+
+  if (from.soldiers - soldiers < 1) {
+    const error = new Error("player must leave at least one soldier behind!");
+    error.status = 400;
+    throw error;
+  }
+
+  from.soldiers -= soldiers;
+  to.soldiers += soldiers;
+  game.phase = "reinforce";
+  game.round += 1;
+
+  await gameRepo.updateGame(gameId, game);
+
+  return {
+    ...game,
+    playerEvent: { type: "move", toId, fromId, soldiers },
+    computerEvevts: [],
+  };
+}
+
+export const gameService = {
+  startGame,
+  getGameById,
+  reinforcePlayer,
+  playerAttack,
+  playerMove,
+};

@@ -16,8 +16,8 @@ async function saveMapTerritories(map) {
 
 async function getMapByArea(area) {
   const collection = await getCollection();
-  const result = collection.findOne({ area });
-  return result.territories;
+  const result = await collection.findOne({ area });
+  return result;
 }
 
 export const mapRepo = { saveMapTerritories, getMapByArea };

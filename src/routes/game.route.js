@@ -20,8 +20,35 @@ router.get("/:id", async (req, res) => {
 
 router.post("/:id/reinforce", async (req, res) => {
   const gameId = req.params.id;
+
   const territoryId = Number(req.body.territoryId);
 
   const result = await gameService.reinforcePlayer(gameId, territoryId);
+  res.json(result);
+});
+
+router.post("/:id/attack", async (req, res) => {
+  const gameId = req.params;
+  console.log(req.params);
+  //   if (req.body.skip) {
+  //     const result = await gameService.playerAttack(true, gameId);
+  //     res.json(result);
+  //   }
+
+  const fromId = Number(req.body.fromId);
+  const toId = Number(req.body.toId);
+  const soldiers = Number(req.body.soldiers);
+
+  const result = await gameService.playerAttack(gameId, fromId, toId, soldiers);
+  res.json(result);
+});
+
+router.post("/:id/move", async (req, res) => {
+  const gameId = req.params.id;
+  const fromId = Number(req.body.fromId);
+  const toId = Number(req.body.toId);
+  const soldiers = Number(req.body.soldiers);
+
+  const result = await gameService.playerMove(gameId, fromId, toId, soldiers);
   res.json(result);
 });
