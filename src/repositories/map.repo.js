@@ -4,7 +4,7 @@ import { Collection } from "mongodb";
 async function getCollection() {
   const db = await connectAndGetDb();
   /** @type {Collection} */
-  const collection = db.collection("map");
+  const collection = db.collection("maps");
   return collection;
 }
 
@@ -14,4 +14,10 @@ async function saveMapTerritories(map) {
   return result.insertedId.toString();
 }
 
-export const mapRepo = { saveMapTerritories };
+async function getMapByArea(area) {
+  const collection = await getCollection();
+  const result = collection.findOne({ area });
+  return result.territories;
+}
+
+export const mapRepo = { saveMapTerritories, getMapByArea };
