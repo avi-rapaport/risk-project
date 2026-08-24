@@ -1,4 +1,4 @@
-import { computerService } from "../src/services/computer.service.js";
+import { runComputerTurn } from "../src/services/computer.service.js";
 import assert from "node:assert/strict";
 import test, { describe } from "node:test";
 
@@ -465,8 +465,8 @@ const gameTest2 = {
       startOwner: "player",
       distanceFromComputerHQ: 5,
       distanceFromPlayerHQ: 1,
-      owner: "player",
-      soldiers: 4,
+      owner: "computer",
+      soldiers: 20,
     },
     {
       id: 17,
@@ -479,7 +479,7 @@ const gameTest2 = {
       distanceFromComputerHQ: 6,
       distanceFromPlayerHQ: 0,
       owner: "player",
-      soldiers: 8,
+      soldiers: 3,
     },
     {
       id: 18,
@@ -534,11 +534,17 @@ const gameTest2 = {
 
 describe("computer algorithem test", () => {
   test("should reinforce ביירות id:2", () => {
-    const result = computerService.handleComputerReinforce(gameTest1);
+    const result = runComputerTurn(gameTest1);
     console.log(result);
-    assert.strictEqual(result.territoryId, 2);
-    assert.strictEqual(result.soldiersAdded, 3);
+
+    assert.strictEqual(result[0].territoryId, 2);
+    assert.strictEqual(result[0].soldiersAdded, 3);
   });
 
-  test("should attack ירושלים id:17", () => {});
+  test("should attack ירושלים id:17", () => {
+    const result = runComputerTurn(gameTest2);
+    console.log(result);
+    assert.strictEqual(result[1].toId, 17);
+    assert.strictEqual(result[1].fromId, 16);
+  });
 });

@@ -1,6 +1,6 @@
 import { calculateBattle } from "../utils/utils.battle.js";
 
-export async function runComputerTurn(game) {
+export function runComputerTurn(game) {
   const computerEvevts = [];
 
   const reinforceEvent = handleComputerReinforce(game);
@@ -87,6 +87,7 @@ function handleComputerAttack(game) {
       }
 
       const sentSoldiers = from.soldiers - 1;
+
       const advantageRatio = sentSoldiers / to.soldiers;
 
       const isHQattack = to.headquarters && sentSoldiers > to.soldiers;
@@ -144,7 +145,7 @@ function handleComputerAttack(game) {
     }
   } else {
     bestAttack.to.soldiers = survivors;
-    winner = "player";
+    theWinner = "player";
   }
 
   return {
