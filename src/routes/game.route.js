@@ -52,7 +52,7 @@ router.post("/:id/move", async (req, res) => {
   res.json(result);
 });
 
-router.param("/:id/end-turn", async (req, res) => {
+router.post("/:id/end-turn", async (req, res) => {
   const gameId = req.params.id;
 
   const result = await gameService.endTurn(gameId);

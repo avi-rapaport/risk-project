@@ -229,9 +229,8 @@ async function playerMove(gameId, fromId, toId, soldiers) {
   from.soldiers -= soldiers;
   to.soldiers += soldiers;
 
-  await gameRepo.updateGame(gameId, game);
-
   const computerEvevts = runComputerTurn(game);
+  await gameRepo.updateGame(gameId, game);
 
   return {
     game: formatGameId(game),
@@ -249,6 +248,7 @@ async function endTurn(gameId) {
   }
 
   const computerEvevts = runComputerTurn(game);
+  await gameRepo.updateGame(gameId, game);
 
   return {
     game: formatGameId(game),

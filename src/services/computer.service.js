@@ -1,4 +1,5 @@
-import { router } from "../routes/game.route";
+import { gameService } from "./game.service";
+import { calculateBattle } from "../utils/utils.battle.js";
 
 export async function runComputerTurn(game) {
   const computerEvevts = [];
@@ -74,20 +75,92 @@ function handleComputerReinforce(game) {
 }
 
 function handleComputerAttack(game) {
-  const computerTerritories = game.territories.filter(
-    (t) => t.owner === "computer",
-  );
   const playerTerritories = game.territories.filter(
     (t) => t.owner === "player",
   );
 
+  const computerTerritories = game.territories.filter(
+    (t) => t.owner === "computer",
+  );
+
   const candidates = [];
 
-  if (!candidates) {
-    return;
+  for (const from of game.territories) {
+    if (from.owner !== "computer" || from.soldiers < 1) {
+      continue;
+    }
+
+    for (const nId of from.neighbors) {
+      const to = game.territories.find((t) => t.id === nId);
+      if (!to || to.owner === "computer") {
+        continue;
+      }
+
+      const sentSoldiers = from.soldiers - 1;
+      const advantageRatio = sentSoldiers / to.soldiers;
+
+      const isHQattack = to.headquarters && sentSoldiers > to.soldiers;
+      const isRegolarAttack = !to.headquarters && advantageRatio >= 1.35;
+
+      if (isHQattack || isRegolarAttack) {
+        const progress =
+          (from.distanceFromPlayerHQ - to.distanceFromPlayerHQ) * 10;
+        const soldierAdvantage = sentSoldiers - to.soldiers;
+        const protectsHeadquarters =
+          Math.max(0, 3 - to.distanceFromComputerHQ) * 25;
+        const headquartersScore = to.headquarters ? 1000 : 0;
+
+        const score =
+          progress +
+          soldierAdvantage +
+          protectsHeadquarters +
+          headquartersScore;
+
+        candidates.push({ from, to, sentSoldiers, score });
+      }
+    }
   }
 
-  return { type: "attack" };
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const sortAttacks = candidates.sort((a, b) => {
+    if (a.score !== b.score) {
+      return b.score - a.score;
+    } else if (a.to.id !== b.to.id) {
+      return a.to.id - b.to.id;
+    } else {
+      return a.from.id - b.from.id;
+    }
+  });
+
+  const bestAttack = sortAttacks[0];
+  bestAttack.from.soldiers - sentSoldiers;
+
+  const { survivors, winner } = calculateBattle(
+    bestAttack.sentSoldiers,
+    bestAttack.to.soldiers,
+  );
+
+  if (winner === "attacker") {
+    bestAttack.to.soldiers = survivors;
+    bestAttack.to.owner = "computer";
+
+    if (bestAttack.to.headquarters) {
+      game.winner = "computer";
+      game.status = "finished";
+    }
+  } else {
+    bestAttack.to.soldiers = survivors;
+  }
+
+  return {
+    type: "attack",
+    toId: bestAttack.to.id,
+    fromId: bestAttack.from.id,
+    soldiers: sentSoldiers,
+  };
 }
 
 function handleComputerMove(game) {
@@ -120,8 +193,7 @@ function handleComputerMove(game) {
       for (const neighbor of ter.neighbors) {
         const to = computerTerritories.find((t) => t.id === neighbor);
         if (to) {
-          const move = { from, to };
-          candidates.push(move);
+          candidates.push({ from, to });
         } else {
           continue;
         }
@@ -131,8 +203,8 @@ function handleComputerMove(game) {
     }
   }
 
-  if (!candidates) {
-    return;
+  if (candidates.length === 0) {
+    return null;
   }
 
   if (isDefence) {
