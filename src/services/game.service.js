@@ -11,7 +11,7 @@ function formatGameId(game) {
 
 async function startGame(playerName) {
   if (!playerName.trim()) {
-    const error = new Error("Invalid or missing playerName");
+    const error = new Error("שם שחקן חסר או לא חוקי!");
     error.status = 400;
     throw error;
   }

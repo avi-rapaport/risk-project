@@ -29,7 +29,9 @@ function handleComputerReinforce(game) {
   const playerTerritories = game.territories.filter(
     (t) => t.owner === "player",
   );
-  const minDistance = Math.min(...playerTerritories.map((t) => t.id));
+  const minDistance = Math.min(
+    ...playerTerritories.map((t) => t.distanceFromComputerHQ),
+  );
   const isDefence = minDistance <= 2;
 
   const borderTerritories = [];
@@ -228,3 +230,9 @@ function handleComputerMove(game) {
     soldiers: sentSoldiers,
   };
 }
+
+export const computerService = {
+  handleComputerReinforce,
+  handleComputerAttack,
+  handleComputerMove,
+};
