@@ -180,7 +180,7 @@ async function skipAttack(gameId) {
 
   game.phase = "move";
   await gameRepo.updateGame(gameId, game);
-  return { game, playerEvent: null, computerEvevts: [] };
+  return { game: formatGameId(game), playerEvent: null, computerEvevts: [] };
 }
 
 async function playerMove(gameId, fromId, toId, soldiers) {

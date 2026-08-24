@@ -28,7 +28,7 @@ router.post("/:id/reinforce", async (req, res) => {
 
 router.post("/:id/attack", async (req, res) => {
   const gameId = req.params;
-  console.log(req.params);
+
   if (req.body.skip) {
     const result = await gameService.skipAttack(gameId);
     return res.json(result);

@@ -1,4 +1,3 @@
-import { gameService } from "./game.service";
 import { calculateBattle } from "../utils/utils.battle.js";
 
 export async function runComputerTurn(game) {
@@ -30,10 +29,7 @@ function handleComputerReinforce(game) {
   const playerTerritories = game.territories.filter(
     (t) => t.owner === "player",
   );
-  const sortedTerritories = playerTerritories.sort((a, b) => {
-    a.distanceFromComputerHQ - b.distanceFromComputerHQ;
-  });
-  const minDistance = sortedTerritories[0];
+  const minDistance = Math.min(...playerTerritories.map((t) => t.id));
   const isDefence = minDistance <= 2;
 
   const borderTerritories = [];
@@ -75,14 +71,6 @@ function handleComputerReinforce(game) {
 }
 
 function handleComputerAttack(game) {
-  const playerTerritories = game.territories.filter(
-    (t) => t.owner === "player",
-  );
-
-  const computerTerritories = game.territories.filter(
-    (t) => t.owner === "computer",
-  );
-
   const candidates = [];
 
   for (const from of game.territories) {
@@ -136,12 +124,13 @@ function handleComputerAttack(game) {
   });
 
   const bestAttack = sortAttacks[0];
-  bestAttack.from.soldiers - sentSoldiers;
+  bestAttack.from.soldiers - bestAttack.sentSoldiers;
 
   const { survivors, winner } = calculateBattle(
     bestAttack.sentSoldiers,
     bestAttack.to.soldiers,
   );
+  let theWinner = "computer";
 
   if (winner === "attacker") {
     bestAttack.to.soldiers = survivors;
@@ -153,13 +142,15 @@ function handleComputerAttack(game) {
     }
   } else {
     bestAttack.to.soldiers = survivors;
+    winner = "player";
   }
 
   return {
     type: "attack",
     toId: bestAttack.to.id,
     fromId: bestAttack.from.id,
-    soldiers: sentSoldiers,
+    soldiers: bestAttack.sentSoldiers,
+    winner: theWinner,
   };
 }
 
@@ -167,54 +158,48 @@ function handleComputerMove(game) {
   const playerTerritories = game.territories.filter(
     (t) => t.owner === "player",
   );
-  playerTerritories.sort((a, b) => {
-    a.distanceFromComputerHQ - b.distanceFromComputerHQ;
-  });
-  const minDistance = playerTerritories[0];
+
+  const minDistance = Math.min(...playerTerritories.map((t) => t.id));
   const isDefence = minDistance <= 2;
-  const computerTerritories = game.territories.filter(
-    (t) => t.owner === "computer",
-  );
 
   let candidates = [];
 
-  for (const from of computerTerritories) {
-    let min = 1;
-    if (from.headquarters) {
-      min = 4;
+  for (const from of game.territories) {
+    let minimum = from.headquarters ? 4 : 1;
+    if (from.owner !== "computer" || from.soldiers < minimum) {
+      continue;
     }
 
     if (
-      from.soldiers > min &&
-      from.neighbors.every((nId) => {
-        !playerTerritories.map((t) => t.id).includes(nId);
+      from.neighbors.some((nId) => {
+        playerTerritories.map((t) => t.id).includes(nId);
       })
     ) {
-      for (const neighbor of ter.neighbors) {
-        const to = computerTerritories.find((t) => t.id === neighbor);
-        if (to) {
-          candidates.push({ from, to });
-        } else {
+      continue;
+    }
+
+    for (const nId of from.neighbors) {
+      const to = game.territories.find((t) => t.id === nId);
+      if (!to || to.owner === "player") {
+        continue;
+      }
+
+      if (isDefence) {
+        if (to.distanceFromComputerHQ >= from.distanceFromComputerHQ) {
+          continue;
+        }
+      } else {
+        if (to.distanceFromPlayerHQ >= from.distanceFromPlayerHQ) {
           continue;
         }
       }
-    } else {
-      continue;
+
+      candidates.push({ from, to });
     }
   }
 
   if (candidates.length === 0) {
     return null;
-  }
-
-  if (isDefence) {
-    candidates = candidates.filter((move) => {
-      move.to.distanceFromComputerHQ < move.from.distanceFromComputerHQ;
-    });
-  } else {
-    candidates = candidates.filter((move) => {
-      move.to.distanceFromPlayerHQ < move.from.distanceFromPlayerHQ;
-    });
   }
 
   const sortCandidates = candidates.sort((a, b) => {
@@ -227,11 +212,11 @@ function handleComputerMove(game) {
     }
   });
 
+  const toMove = sortCandidates[0];
+
   const sentSoldiers = toMove.from.headquarters
     ? toMove.from.soldiers - 4
     : toMove.from.soldiers - 1;
-
-  const toMove = sortCandidates[0];
 
   toMove.from.soldiers -= sentSoldiers;
   toMove.to.soldiers += sentSoldiers;
