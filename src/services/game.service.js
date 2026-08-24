@@ -2,6 +2,12 @@ import { mapRepo } from "../repositories/map.repo.js";
 import { gameRepo } from "../repositories/game.repo.js";
 import fs from "fs/promises";
 import { calculateBattle } from "../utils/utils.battle.js";
+import { runComputerTurn } from "./computer.service.js";
+
+function formatGameId(game) {
+  const { _id, ...rest } = game;
+  return { id: _id.toString(), ...rest };
+}
 
 async function startGame(playerName) {
   if (!playerName.trim()) {
@@ -51,13 +57,13 @@ async function startGame(playerName) {
 async function getGameById(id) {
   const game = await gameRepo.findGameById(id);
   if (!game) {
-    const error = new Error("Game not found1");
+    const error = new Error("משחק לא נמצא!");
     error.status = 404;
     throw error;
   }
 
   if (game.status === "finished") {
-    const error = new Error("Game already finished!");
+    const error = new Error("המשחק כבר הסתיים!");
     error.status = 409;
     throw error;
   }
@@ -68,14 +74,14 @@ async function getGameById(id) {
 async function reinforcePlayer(gameId, territoryId) {
   const game = await getGameById(gameId);
   if (game.status !== "playing" || game.phase !== "reinforce") {
-    const error = new Error("Game is not suitable for reinforcing!");
+    const error = new Error("המשחק אינו מותאם למצב תגבור!");
     error.status = 400;
     throw error;
   }
 
   const territory = game.territories.find((t) => t.id === territoryId);
   if (territory.owner !== "player") {
-    const error = new Error("Territory is not owned by the player!");
+    const error = new Error("הטריטוריה איננה נשלטת על ידי השחקן!");
     error.status = 400;
     throw error;
   }
@@ -86,7 +92,7 @@ async function reinforcePlayer(gameId, territoryId) {
   await gameRepo.updateGame(gameId, game);
 
   return {
-    ...game,
+    game: formatGameId(game),
     playerEvent: { type: "reinforce", territoryId, soldiersAdded: 3 },
     computerEvevts: [],
   };
@@ -94,49 +100,42 @@ async function reinforcePlayer(gameId, territoryId) {
 
 async function playerAttack(gameId, fromId, toId, soldiers) {
   const game = await getGameById(gameId);
-  //   if (skip) {
-  //     game.phase = "move";
-  //     await gameRepo.updateGame(gameId, game);
-  //     return { ...game, playerEvent: null, computerEvevts: [] };
-  //   }
 
   const from = game.territories.find((t) => t.id === fromId);
   const to = game.territories.find((t) => t.id === toId);
 
   if (game.status !== "playing" || game.phase !== "attack") {
-    const error = new Error("Game is not suitable for attacking!");
+    const error = new Error("המשחק אינו מתאים למצב תקיפה!");
     error.status = 400;
     throw error;
   }
 
   if (!Number.isInteger(soldiers) || soldiers < 1) {
-    const error = new Error("Invalid amount of soldiers!");
+    const error = new Error("כמות בלתי חוקית של חיילים!");
     error.status = 400;
     throw error;
   }
 
   if (from.owner !== "player") {
-    const error = new Error("Territory is not owned by the player!");
+    const error = new Error("הטריטוריה איננה נשלטת על ידי השחקן!");
     error.status = 400;
     throw error;
   }
 
-  if (to.owner !== "compuetr") {
-    const error = new Error("player already owned this territory!");
+  if (to.owner !== "computer") {
+    const error = new Error("הטריטוריה כבר נמצאת בשליטת השחקן!");
     error.status = 400;
     throw error;
   }
 
   if (!from.neighbors.includes(to.id)) {
-    const error = new Error(
-      "Player cannot attack a territory that is not neighboring!",
-    );
+    const error = new Error("השחקן אינו יכול לתקוף טריטוריה שאיננה שכנה!");
     error.status = 400;
     throw error;
   }
 
   if (from.soldiers - soldiers < 1) {
-    const error = new Error("player must leave at least one soldier behind!");
+    const error = new Error("השחקן חייב להשאיר מאחור לפחות חייל אחד");
     error.status = 400;
     throw error;
   }
@@ -152,8 +151,8 @@ async function playerAttack(gameId, fromId, toId, soldiers) {
     theWinner = "player";
 
     if (to.headquarters) {
-      game.status = "finished";
       game.winner = "player";
+      game.status = "finished";
     }
   } else {
     to.soldiers = survivors;
@@ -165,10 +164,23 @@ async function playerAttack(gameId, fromId, toId, soldiers) {
   await gameRepo.updateGame(gameId, game);
 
   return {
-    ...game,
+    game: formatGameId(game),
     playerEvent: { type: "attack", toId, fromId, soldiers, winner: theWinner },
     computerEvevts: [],
   };
+}
+
+async function skipAttack(gameId) {
+  const game = await getGameById(gameId);
+  if (game.status !== "playing" || game.phase !== "attack") {
+    const error = new Error("המשחק אינו במצב תקיפה!");
+    error.status = 400;
+    throw error;
+  }
+
+  game.phase = "move";
+  await gameRepo.updateGame(gameId, game);
+  return { game, playerEvent: null, computerEvevts: [] };
 }
 
 async function playerMove(gameId, fromId, toId, soldiers) {
@@ -177,48 +189,71 @@ async function playerMove(gameId, fromId, toId, soldiers) {
   const to = game.territories.find((t) => t.id === toId);
 
   if (game.status !== "playing" || game.phase !== "move") {
-    const error = new Error("Game is not suitable for moving!");
+    const error = new Error("מצב המשחק אינו מתאים להעברה!");
     error.status = 400;
     throw error;
   }
 
   if (!Number.isInteger(soldiers) || soldiers < 1) {
-    const error = new Error("Invalid amount of soldiers!");
+    const error = new Error("כמות בלתי חוקית של חיילים!");
     error.status = 400;
     throw error;
   }
 
   if (from.owner !== "player" || to.owner !== "player") {
-    const error = new Error("Territory is not owned by the player!");
+    const error = new Error("הטריטוריה אינה של השחקן!");
     error.status = 400;
     throw error;
   }
 
   if (!from.neighbors.includes(to.id)) {
     const error = new Error(
-      "Player cannot move to a territory that is not neighboring!",
+      "שחקן אינו יכול להעביר חיילים לטריטוריות שאינן שכנות!",
     );
     error.status = 400;
     throw error;
   }
 
   if (from.soldiers - soldiers < 1) {
-    const error = new Error("player must leave at least one soldier behind!");
+    const error = new Error("השחקן חייב להשאיר מאחור לפחות חייל אחד");
+    error.status = 400;
+    throw error;
+  }
+
+  if (from === to) {
+    const error = new Error("השחקן אינו יכול להזיז לאותו מקום ממנו הוא מעביר!");
     error.status = 400;
     throw error;
   }
 
   from.soldiers -= soldiers;
   to.soldiers += soldiers;
-  game.phase = "reinforce";
-  game.round += 1;
 
   await gameRepo.updateGame(gameId, game);
 
+  const computerEvevts = runComputerTurn(game);
+
   return {
-    ...game,
+    game: formatGameId(game),
     playerEvent: { type: "move", toId, fromId, soldiers },
-    computerEvevts: [],
+    computerEvevts,
+  };
+}
+
+async function endTurn(gameId) {
+  const game = await getGameById(gameId);
+  if (game.status !== "playing" || game.phase !== "move") {
+    const error = new Error("המשחק אינו במצב העברה!");
+    error.status = 400;
+    throw error;
+  }
+
+  const computerEvevts = runComputerTurn(game);
+
+  return {
+    game: formatGameId(game),
+    playerEvent: null,
+    computerEvevts,
   };
 }
 
@@ -227,5 +262,7 @@ export const gameService = {
   getGameById,
   reinforcePlayer,
   playerAttack,
+  skipAttack,
   playerMove,
+  endTurn,
 };
